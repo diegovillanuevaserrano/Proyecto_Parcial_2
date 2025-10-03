@@ -1,0 +1,185 @@
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import numpy as np
+
+
+paises = ["CO", "BR", "MX", "AR", "CL", "PE", "EC", "VE", "UY", "PY", "BO"]
+
+
+class DeudaExterna:
+    def __init__(self, paises):
+       self.paises = paises
+       self.anios = [anio for anio in range(2000, 2024)]
+       self.frame = None
+
+def cargar_datos():
+    ses = requests.Session()
+    datos = [
+        {
+            "País": item["country"]["value"],
+            "Código": item["countryiso3code"],
+            "Año": int(item["date"]),
+            "Deuda Externa (USD)": item["value"] / 1e9
+        }
+        for pais in paises
+        for resp in [ses.get(
+            f"https://api.worldbank.org/v2/country/{pais}/indicator/DT.DOD.DECT.CD?format=json&per_page=2000",
+            timeout=20
+        )]
+        if resp.ok
+        for payload in [resp.json()]
+        if isinstance(payload, list) and len(payload) > 1 and payload[1]
+        for item in payload[1]
+        if item.get("value") is not None
+    ]
+
+    frame = pd.DataFrame(datos).sort_values(["País", "Año"]).reset_index(drop=True)
+    print("Descarga finalizada correctamente" if not frame.empty else "No se pudieron descargar datos.")
+    return frame
+
+
+def ultimos_5_por_pais(frame):
+    if frame is None or frame.empty:
+        print("Primero carga los datos (opción 1).")
+        return
+    ultimos_5 = frame.groupby("País").tail(5)
+    print(ultimos_5)
+
+
+def promedios_df(frame):
+    ultimos_5 = frame.groupby("País").tail(5)
+
+    promedios_df = ultimos_5.groupby("País")["Deuda Externa (USD)"].mean().reset_index()
+
+    print(promedios_df.sort_values("Deuda Externa (USD)", ascending=False))
+    return promedios_df
+
+def ver_pais_especifico(frame):
+    if frame is None or frame.empty:
+        print("Primero carga los datos (opción 1).")
+        return
+    paises_frame = frame["Código"].astype(str).str.strip().str.upper().unique()
+
+    print(f"\nPaíses disponibles: {', '.join(paises_frame)}")
+
+
+    codigo = input("Escribe el código del país que quieres ver: ").strip().upper()
+
+    if codigo not in paises_frame:
+        print("Código de país no válido.")
+        return
+
+    datos_pais = frame[frame["Código"] == codigo].sort_values("Año")
+
+    if datos_pais.empty:
+        print(f"No hay datos disponibles para el país {codigo}.")
+        return
+
+    print(f"\nDatos de deuda externa para {datos_pais['País'].iloc[0]}:")
+
+    print(datos_pais.tail(5))
+
+    print(f"\nPromedio de deuda externa para {datos_pais['País'].iloc[0]}:")
+
+    print(promedios_df(datos_pais))
+
+
+
+def grafico_lineas(frame):
+
+    paises_frame = frame["Código"].astype(str).str.strip().str.upper().unique()
+
+    print(f"\nPaíses disponibles: {', '.join(paises_frame)}")
+    codigo = input("Código del país para ver su tendencia: ").strip().upper()
+    datos = frame[frame["Código"] == codigo].sort_values("Año")
+
+    if datos.empty:
+      print("No hay datos para ese país.")
+      return
+
+    plt.figure(figsize=(10, 7))
+    plt.plot(datos["Año"], datos["Deuda Externa (USD)"], marker='o', color='red', linestyle= "--")
+    plt.title(f"Evolución de la Deuda Externa ({codigo})",fontsize=14, fontweight="bold")
+    plt.xlabel("Año", fontsize = 14)
+    plt.ylabel("Deuda Externa (USD)", fontsize = 14)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def barras_promedio(frame):
+    if frame is None or frame.empty:
+        print("Primero carga los datos (opción 1).")
+        return
+    ultimos_5 = frame.groupby("País").tail(5)
+    promedios_ultimos_5 = ultimos_5.groupby("País")["Deuda Externa (USD)"].mean().reset_index()
+
+    promedios_ultimos_5 = promedios_ultimos_5.sort_values("Deuda Externa (USD)", ascending=False)
+
+    plt.style.use("seaborn-v0_8-darkgrid")
+    plt.figure(figsize=(10, 5))
+    plt.bar(promedios_ultimos_5["País"], promedios_ultimos_5["Deuda Externa (USD)"], color="royalblue")
+
+    plt.title("Promedio de Deuda Externa (últimos 5 años) por País", fontsize=16, fontweight='bold')
+    plt.xlabel("País", fontsize=14, labelpad=10)
+    plt.ylabel("Deuda Externa Promedio (miles de millones USD)", fontsize=12, labelpad=10)
+    plt.xticks(rotation=14, fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.tight_layout()
+    plt.show()
+
+
+
+def menu_graficos(frame):
+    while True:
+        print("\n GRÁFICOS")
+        print("1. Gráfico line de tendencia país seleccionado")
+        print("2. Promedio de deuda externa de los últimos 5 años por país")
+        print("3. Volver al menú principal")
+
+        opcion = input("Elige una opción: ")
+
+        if opcion == "1":
+            grafico_lineas(frame)
+        elif opcion == "2":
+            barras_promedio(frame)
+        elif opcion == "3":
+            break
+        else:
+            print("Opción no válida.")
+
+def menu():
+    frame = None
+    while True:
+        print("\n=== MENÚ PRINCIPAL ===")
+        print("1. Cargar datos")
+        print("2. Ver últimos 5 años por país")
+        print("3. Promedio últimos 5 años por país")
+        print("4. Deuda y promedio últimos 5 años por país específico")
+        print("5. Gráficos ")
+        print("6. Salir")
+
+        opcion = input("Elige una opción: ")
+
+        if opcion == "1":
+            frame = cargar_datos()
+        elif opcion == "2":
+            ultimos_5_por_pais(frame)
+        elif opcion == "3":
+            promedios_df(frame)
+        elif opcion == "4":
+            ver_pais_especifico(frame)
+        elif opcion == "5":
+            if frame is None:
+                print("Primero debes cargar los datos.")
+            else:
+                menu_graficos(frame)
+        elif opcion == "6":
+            print("Saliendo")
+            break
+        else:
+            print("Opción inválida.")
+
+
+menu()
