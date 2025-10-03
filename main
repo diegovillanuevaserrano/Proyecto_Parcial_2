@@ -7,27 +7,38 @@ import numpy as np
 
 paises = ["CO", "BR", "MX", "AR", "CL", "PE", "EC", "VE", "UY", "PY", "BO"]
 
+
+class DeudaExterna:
+    def __init__(self, paises):
+       self.paises = paises
+       #List Comprehension
+       self.anios = [anio for anio in range(2000, 2024)]
+       self.frame = None
+
 def cargar_datos():
+      # Creamos una sesión de requests para hacer varias peticiones a la API del Banco Mundial
     ses = requests.Session()
+    # List comprehension que recorre los países y descarga la deuda externa desde la API
     datos = [
         {
-            "País": item["country"]["value"],
-            "Código": item["countryiso3code"],
-            "Año": int(item["date"]),
-            "Deuda Externa (USD)": item["value"] / 1e9
+            "País": item["country"]["value"], # Nombre completo del país
+            "Código": item["countryiso3code"], # Código del país
+            "Año": int(item["date"]), #Año
+            "Deuda Externa (USD)": item["value"] / 1e9 ## Valor en miles de millones de dólares
         }
         for pais in paises
+        # Hicimos la petición a la API del Banco Mundial para deuda externa (DT.DOD.DECT.CD)
         for resp in [ses.get(
             f"https://api.worldbank.org/v2/country/{pais}/indicator/DT.DOD.DECT.CD?format=json&per_page=2000",
             timeout=20
         )]
         if resp.ok
         for payload in [resp.json()]
-        if isinstance(payload, list) and len(payload) > 1 and payload[1]
+        if isinstance(payload, list) and len(payload) > 1 and payload[1] # Validamos que haya datos
         for item in payload[1]
         if item.get("value") is not None
     ]
-
+    # Convertimos la lista de diccionarios en un DataFrame ordenado por país y año
     frame = pd.DataFrame(datos).sort_values(["País", "Año"]).reset_index(drop=True)
     print("Descarga finalizada correctamente" if not frame.empty else "No se pudieron descargar datos.")
     return frame
@@ -37,14 +48,16 @@ def ultimos_5_por_pais(frame):
     if frame is None or frame.empty:
         print("Primero carga los datos (opción 1).")
         return
-    ultimos_5 = frame.groupby("País").tail(5)
+    ultimos_5 = frame.groupby("País").tail(5) #Extreamos los ultimos 5 registros por pais
     print(ultimos_5)
 
 
 def promedios_df(frame):
     ultimos_5 = frame.groupby("País").tail(5)
 
-    promedios_df = ultimos_5.groupby("País")["Deuda Externa (USD)"].mean().reset_index()
+    promedios_df = ultimos_5.groupby("País")["Deuda Externa (USD)"].mean().apply(lambda x: np.mean(x)).reset_index()
+    promedios_df["Desv.Estándar"] = ( ultimos_5.groupby("País")["Deuda Externa (USD)"].apply(lambda x: np.std(x)).values )
+
 
     print(promedios_df.sort_values("Deuda Externa (USD)", ascending=False))
     return promedios_df
@@ -53,33 +66,33 @@ def ver_pais_especifico(frame):
     if frame is None or frame.empty:
         print("Primero carga los datos (opción 1).")
         return
-    paises_frame = frame["Código"].astype(str).str.strip().str.upper().unique()
+    paises_frame = frame["Código"].astype(str).str.strip().str.upper().unique() #Observamos que la opcion sea texto, quitamos espacios
+
 
     print(f"\nPaíses disponibles: {', '.join(paises_frame)}")
 
 
-    codigo = input("Escribe el código del país que quieres ver: ").strip().upper()
+    codigo = input("Escribe el código del país que quieres ver: ").strip().upper() #Observamos que sea un texto y tenga mayusuclas
 
     if codigo not in paises_frame:
         print("Código de país no válido.")
         return
 
-    datos_pais = frame[frame["Código"] == codigo].sort_values("Año")
+    datos_pais = frame[frame["Código"] == codigo].sort_values("Año") #Se dejan solo las filas que coincidan con el pais
 
     if datos_pais.empty:
         print(f"No hay datos disponibles para el país {codigo}.")
         return
 
-    print(f"\nDatos de deuda externa para {datos_pais['País'].iloc[0]}:")
+    print(f"\nDatos de deuda externa para {datos_pais['País'].iloc[0]}:") #Iloc toma el primer nombre que se selecciona
 
-    print(datos_pais.tail(5))
+    print(datos_pais.tail(5)) #Muestra las últimas 5 filas (años más recientes) de la deuda externa para ese país.
 
-    print(f"\nPromedio de deuda externa para {datos_pais['País'].iloc[0]}:")
+    print(f"\nPromedio de deuda externa para {datos_pais['País'].iloc[0]}:") #Calcula y muestra el promedio de deuda externa para ese país usando la función
 
     print(promedios_df(datos_pais))
 
-
-
+#Graficos
 def grafico_lineas(frame):
 
     paises_frame = frame["Código"].astype(str).str.strip().str.upper().unique()
@@ -122,12 +135,6 @@ def barras_promedio(frame):
     plt.tight_layout()
     plt.show()
 
-
-class DeudaExterna:
-    def __init__(self, paises):
-       self.paises = paises
-       self.anios = [anio for anio in range(2000, 2024)]
-       self.frame = None
 
 
 def menu_graficos(frame):
