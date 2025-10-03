@@ -8,13 +8,6 @@ import numpy as np
 paises = ["CO", "BR", "MX", "AR", "CL", "PE", "EC", "VE", "UY", "PY", "BO"]
 
 
-class DeudaExterna:
-    def __init__(self, paises):
-       self.paises = paises
-       #List Comprehension
-       self.anios = [anio for anio in range(2000, 2024)]
-       self.frame = None
-
 def cargar_datos():
       # Creamos una sesión de requests para hacer varias peticiones a la API del Banco Mundial
     ses = requests.Session()
@@ -135,7 +128,12 @@ def barras_promedio(frame):
     plt.tight_layout()
     plt.show()
 
-
+class DeudaExterna:
+    def __init__(self, paises):
+       self.paises = paises
+       #List Comprehension
+       self.anios = [anio for anio in range(2000, 2024)]
+       self.frame = None
 
 def menu_graficos(frame):
     while True:
